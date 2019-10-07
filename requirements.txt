@@ -1,7 +1,7 @@
 mwapi
 h5py
 keras==2.1.5
-tensorflow==1.7.0
+tensorflow==1.12.2
 beautiulsoup4
 nltk
 numpy
