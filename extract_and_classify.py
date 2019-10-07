@@ -1,4 +1,3 @@
-# import statements
 import mwapi
 import re
 import pickle
@@ -6,7 +5,7 @@ import numpy as np
 import nltk
 nltk.download('punkt')  # fetching pretrained PunktSentenceTokenizer model
 
-from operator import itemgetter
+
 from keras.models import load_model
 from bs4 import BeautifulSoup
 from keras.preprocessing.sequence import pad_sequences
@@ -93,7 +92,6 @@ def construct_instance_reasons(statements,  max_len=-1):
             section = row[1].lower()
             sections.append(np.array([section_dict[section] if section in section_dict else 0]))
 
-
             X.append(X_inst)
             outstring.append(str(row[2]))
 
@@ -155,11 +153,11 @@ if __name__ == '__main__':
         except IndexError:
                     continue
 
-
+        exceptions = ['See also', 'References',
+                                 'External links','Further reading']
         for k in content['parse']['sections']:
             # Looping through all the sections
-            if k['line'] not in ['See also', 'References',
-                                 'External links','Further reading']:  # filtering out sections with the followwing titles
+            if k['line'] not in exceptions:  # filtering out sections with the following titles
                 if k['toclevel'] is 1:  # specifying only level 1 sections
                     section_content = session.get(
                         action="parse",
