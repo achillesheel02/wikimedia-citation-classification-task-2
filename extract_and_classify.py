@@ -130,7 +130,7 @@ if __name__ == '__main__':
                 break
 
     sample_data = []
-    footnote_tags = '\[\d+\]'  # regex pattern or removing footnotes i.e. [1]
+    tags_to_eliminate = '\[\d+\]|\[citation needed\]'  # regex pattern or removing footnotes i.e. [1], [citation needed]
 
     for item in response['query']['search']:
         if title_query.lower() not in item['title'].lower(): continue # I noticed that some of the queries don't have the actual title query in the title so I did this check
@@ -151,7 +151,7 @@ if __name__ == '__main__':
                     # finding all p tags and ending at the next div tag
                     if element.name == 'p':
                         statements = element.get_text()
-                        statements = re.sub(footnote_tags, '', statements)  # removing the footnote tags
+                        statements = re.sub(tags_to_eliminate, '', statements)  # removing the footnote tags
                         statements = sent_tokenize(statements)  # splitting it up into individual sentences
 
                         for statement in statements:
@@ -183,7 +183,7 @@ if __name__ == '__main__':
                     for x in soup.find_all('p'):
                         # finding all <p> tags
                         statements = x.text
-                        statements = re.sub(footnote_tags, '', statements)  # removing the footnote tags
+                        statements = re.sub(tags_to_eliminate, '', statements)  # removing the footnote tags
                         statements = sent_tokenize(statements)  # splitting it up into individual sentences
 
                         for statement in statements:
