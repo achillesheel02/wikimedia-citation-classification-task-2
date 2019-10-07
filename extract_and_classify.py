@@ -3,8 +3,6 @@ import re
 import pickle
 import numpy as np
 import nltk
-nltk.download('punkt')  # fetching pretrained PunktSentenceTokenizer model
-
 
 from keras.models import load_model
 from bs4 import BeautifulSoup
@@ -15,6 +13,7 @@ from nltk.tokenize import sent_tokenize
 from keras import backend as K
 K.set_session(K.tf.Session(config=K.tf.ConfigProto(intra_op_parallelism_threads=10, inter_op_parallelism_threads=10)))
 
+nltk.download('punkt')  # fetching pretrained PunktSentenceTokenizer model
 
 def text_to_word_list(text):
     # check first if the statements is longer than a single sentence.
@@ -75,7 +74,7 @@ def construct_instance_reasons(statements,  max_len=-1):
     outstring=[]
     for row in statements:
         try:
-            print(row)
+
             statement_text = text_to_word_list(row[2])
 
             X_inst = []
@@ -114,14 +113,27 @@ if __name__ == '__main__':
         action="query",
         list="search",
         format="json",
-        srsearch=title_query,
-        # srwhat='title', search-title-disabled
+        srsearch='intitle:'+title_query, # nifty workaround the search-title-disabled error
     )
+
+    # conditional statement to handle empty response
+    if (response['query']['searchinfo']['totalhits'] == 0):
+        while(response['query']['searchinfo']['totalhits'] == 0):
+            title_query = input('Title not found. Kindly check if you typed it correctly: (Do Ctrl + C to exit)\n>')
+            response = session.get(
+                action="query",
+                list="search",
+                format="json",
+                srsearch='intitle:' + title_query,  # nifty workaround the search-title-disabled error
+            )
+            if response['query']['searchinfo']['totalhits'] > 0:
+                break
 
     sample_data = []
     footnote_tags = '\[\d+\]'  # regex pattern or removing footnotes i.e. [1]
 
     for item in response['query']['search']:
+        if title_query.lower() not in item['title'].lower(): continue # I noticed that some of the queries don't have the actual title query in the title so I did this check
         # going through all search responses
         content = session.get(
             action="parse",
@@ -144,17 +156,17 @@ if __name__ == '__main__':
 
                         for statement in statements:
                             if statement is not '':
-                                sample_data.append([wiki_article_title, section_title, statement])
+                                if 'Cite error' not in statement:
+                                    sample_data.append([wiki_article_title, section_title, statement])
 
                     if element.name == 'div':
                         break
 
-
+        # to combat the IndexError that woudl be raised when he for loop above is run
         except IndexError:
                     continue
 
-        exceptions = ['See also', 'References',
-                                 'External links','Further reading']
+        exceptions = ['See also', 'References', 'External links', 'Further reading', 'Footnotes', 'Notes']
         for k in content['parse']['sections']:
             # Looping through all the sections
             if k['line'] not in exceptions:  # filtering out sections with the following titles
@@ -176,7 +188,8 @@ if __name__ == '__main__':
 
                         for statement in statements:
                             if statement is not '':
-                                sample_data.append([wiki_article_title, section_title, statement])
+                                if 'Cite error' not in statement:
+                                    sample_data.append([wiki_article_title, section_title, statement])
 
     # load the model
     model = load_model('model/fa_en_model_rnn_attention_section.h5')
