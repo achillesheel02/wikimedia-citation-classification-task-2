@@ -2,9 +2,11 @@
 import mwapi
 import re
 import pickle
+import numpy as np
 import nltk
-nltk.download('punkt')
+nltk.download('punkt')  # fetching pretrained PunktSentenceTokenizer model
 
+from operator import itemgetter
 from keras.models import load_model
 from bs4 import BeautifulSoup
 from keras.preprocessing.sequence import pad_sequences
@@ -71,7 +73,6 @@ def construct_instance_reasons(statements,  max_len=-1):
     # construct the training data
     X = []
     sections = []
-    #y = ['True','False']
     outstring=[]
     for row in statements:
         try:
@@ -95,16 +96,11 @@ def construct_instance_reasons(statements,  max_len=-1):
 
             X.append(X_inst)
             outstring.append(str(row[2]))
-            #entity_id  revision_id timestamp   entity_title    section_id  section prg_idx sentence_idx    statement   citations
 
         except Exception as e:
             print(row)
             print(e)
     X = pad_sequences(X, maxlen=max_len, value=vocab_w2v['UNK'], padding='pre')
-
-    '''encoder = LabelBinarizer()
-    y = encoder.fit_transform(y)
-    y = to_categorical(y)'''
 
     return X, np.array(sections), outstring
 
@@ -138,8 +134,7 @@ if __name__ == '__main__':
         # Introductory section that is not in the table of contents
         section_title = 'MAIN_SECTION'  # using this label because it was used in the sample text file
         soup = BeautifulSoup(content['parse']['text']['*'], 'html.parser')
-        start = soup.find_all('table',
-                              class_="infobox vcard")  # the section starts after <table class='infobox vcard'>...</table>
+        start = soup.find_all('table')  # the preliminary section starts after the table tag
         try:
             statements=''
             for element in start[0].next_siblings:
@@ -185,9 +180,6 @@ if __name__ == '__main__':
                             if statement is not '':
                                 sample_data.append([wiki_article_title, section_title, statement])
 
-
-
-        print(sample_data)
     # load the model
     model = load_model('model/fa_en_model_rnn_attention_section.h5')
 
@@ -195,19 +187,18 @@ if __name__ == '__main__':
     max_seq_length = model.input[0].shape[1].value
 
     X, sections, outstring = construct_instance_reasons(sample_data, max_seq_length)
-    print(X)
-    print(sections)
+
     # classify the data
     pred = model.predict([X, sections])
+    output = []
 
-    print(pred)
-    # store the predictions: printing out the sentence text, the prediction score, and original citation label.
-    outstr = 'Wiki Title\tText\tPrediction\n'
+    # adding results to a list so as to sort it
     for idx, y_pred in enumerate(pred):
-        outstr += sample_data[idx][0]+'\t' + outstring[idx] + '\t' + str(y_pred[0]) + '\n'
+        output.append([sample_data[idx][0],outstring[idx],y_pred[0]])
 
-    fout = open('output_predictions_sections.tsv', 'wt')
-    print(outstr)
-    fout.write(outstr)
-    fout.flush()
-    fout.close()
+    # printing out results to console
+    output.sort(key=lambda x: x[2]) # sorting by order of prediction score
+    print('Wiki Title\tText\tPrediction\n')
+    for result in output:
+        print(result[0]+'\t'+result[1]+'\t'+str(result[2]))
+
