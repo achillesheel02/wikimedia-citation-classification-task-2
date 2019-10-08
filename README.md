@@ -3,8 +3,8 @@
 
 ## Requirements
 1. `mwapi` - querying and parsing wikimedia content
-2. `keras==2.1.5` - running the model
-3. `tensorflow==1.7.0` - running the model
+2. `keras` - running the model
+3. `tensorflow` - running the model
 4. `h5py` - precursor for tensorflow
 5. `nltk` - tokenizing the paragrapgh into sentences
 6. `beautifulsoup4` - parsing the HTML content
