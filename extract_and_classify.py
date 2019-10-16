@@ -220,7 +220,11 @@ if __name__ == '__main__':
                 break
 
     for item in titles['query']['search']:
-        if title_query.lower() not in item['title'].lower(): continue
+        # checks if title is actually in the title text and handling misspellings by checking if there is a 'suggested'
+        # key in 'searchinfo'
+        if all([title_query.lower() not in item['title'].lower(),
+                'suggestion' not in titles['query']['searchinfo'].keys()]):
+            continue
 
         # GET request to search for a title
         response = session.get(
