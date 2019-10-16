@@ -3,9 +3,9 @@ import re
 import pickle
 import numpy as np
 import nltk
+import mwparserfromhell
 
 from keras.models import load_model
-from bs4 import BeautifulSoup
 from keras.preprocessing.sequence import pad_sequences
 from nltk.tokenize import sent_tokenize
 
@@ -14,6 +14,97 @@ from keras import backend as K
 K.set_session(K.tf.Session(config=K.tf.ConfigProto(intra_op_parallelism_threads=10, inter_op_parallelism_threads=10)))
 
 nltk.download('punkt')  # fetching pretrained PunktSentenceTokenizer model
+
+
+def declutter(obj):
+    """
+    function for removing elements from the wikitext that would otherwise not be removed fully by using the
+    strip_code() function
+    :param obj: Wikicode object from get_sections()
+    :return: Wikicode stripped of all headings, tags (table was the tricky one bringing problems) and thumbnail
+    wikilinks, and external url links, concatenates all the stripped statements into a single string
+    """
+
+    outstring = ''
+    for element in obj:
+        headings = element.filter_headings()
+        for heading in headings:
+            element.remove(heading)
+
+        table_tags = element.filter_tags(element.RECURSE_OTHERS, matches=lambda n: n.tag == "table")
+        for tag in table_tags:
+            element.remove(tag)
+
+        thumbnail_wikilinks = element.filter_wikilinks(element.RECURSE_OTHERS, matches="thumb")
+        for link in thumbnail_wikilinks:
+            element.remove(link)
+
+        external_links = element.filter_external_links(element.RECURSE_OTHERS)
+        for exlink in external_links:
+            element.remove(exlink)
+
+        elements = element.strip_code().split('\n')
+        # print(elements)
+        for e in elements:
+            # some list entries are empty strings or strings with one character
+            re.sub(r"^\;\s*$", "", e)
+            re.sub(r"^\s+$", "", e)
+            if e == '':
+                elements.remove(e)
+
+        outstring = '\n'.join(elements)
+    return outstring
+
+
+def declutter_header(obj):
+    """
+    function for removing elements from the wikitext (leading section in particular)that would otherwise not be
+    removed fully by using the strip_code() function
+    :param obj: Wikicode object from get_sections()
+    :return: Wikicode stripped of all headings, tags (table was the tricky one bringing problems) and thumbnail
+    wikilinks, and external url links, concatenates all the stripped statements into a single string
+    """
+
+    headings = obj.filter_headings()
+    for heading in headings:
+        obj.remove(heading)
+
+    table_tags = obj.filter_tags(obj.RECURSE_OTHERS, matches=lambda n: n.tag == "table")
+    for tag in table_tags:
+        obj.remove(tag)
+
+    thumbnail_wikilinks = obj.filter_wikilinks(obj.RECURSE_OTHERS, matches="thumb")
+    for link in thumbnail_wikilinks:
+        obj.remove(link)
+
+    external_links = obj.filter_external_links(obj.RECURSE_OTHERS)
+    for exlink in external_links:
+        obj.remove(exlink)
+
+    elements = obj.strip_code().split('\n')
+    # print(elements)
+    for e in elements:
+        # some list entries are empty strings or strings with one character
+        re.sub(r"^\;\s*$", "", e)
+        re.sub(r"^\s+$", "", e)
+        if e == '':
+            elements.remove(e)
+
+    return '\n'.join(elements)
+
+
+def construct_test_data(wiki_article_title, section_title, statements):
+    """
+    function for appending the data into one list for feeding to the model
+    :param wiki_article_title: Wikipedia article title
+    :param section_title: Section title
+    :param statements: statements in the section
+    :return: list
+    """
+    data = []
+    for sentence in sent_tokenize(statements):
+        data.append([wiki_article_title, section_title, sentence])
+    return data
 
 def text_to_word_list(text):
     # check first if the statements is longer than a single sentence.
@@ -68,7 +159,7 @@ def construct_instance_reasons(statements,  max_len=-1):
     section_dict = pickle.load(open('embeddings/section_dict_en.pck', 'rb'), encoding='latin1')
 
 
-    # construct the training data
+    # constructnthe training data
     X = []
     sections = []
     outstring=[]
@@ -102,14 +193,13 @@ def construct_instance_reasons(statements,  max_len=-1):
     return X, np.array(sections), outstring
 
 
-
 if __name__ == '__main__':
 
     title_query = input('Type in the title of the article: \n> ')  # query for the Wikipedia title
     session = mwapi.Session('https://en.wikipedia.org')  # creating a new session
 
     # GET request to search for a title
-    response = session.get(
+    titles = session.get(
         action="query",
         list="search",
         format="json",
@@ -117,8 +207,8 @@ if __name__ == '__main__':
     )
 
     # conditional statement to handle empty response
-    if (response['query']['searchinfo']['totalhits'] == 0):
-        while(response['query']['searchinfo']['totalhits'] == 0):
+    if titles['query']['searchinfo']['totalhits'] == 0:
+        while titles['query']['searchinfo']['totalhits'] == 0:
             title_query = input('Title not found. Kindly check if you typed it correctly: (Do Ctrl + C to exit)\n>')
             response = session.get(
                 action="query",
@@ -126,70 +216,48 @@ if __name__ == '__main__':
                 format="json",
                 srsearch='intitle:' + title_query,  # nifty workaround the search-title-disabled error
             )
-            if response['query']['searchinfo']['totalhits'] > 0:
+            if titles['query']['searchinfo']['totalhits'] > 0:
                 break
 
     sample_data = []
-    tags_to_eliminate = '\[\d+\]|\[citation needed\]'  # regex pattern or removing footnotes i.e. [1], [citation needed]
 
-    for item in response['query']['search']:
-        if title_query.lower() not in item['title'].lower(): continue # I noticed that some of the queries don't have the actual title query in the title so I did this check
-        # going through all search responses
-        content = session.get(
+    for item in titles['query']['search']:
+        if title_query.lower() not in item['title'].lower(): continue
+        # I noticed that some of the queries don't have the actual title query in the title so I did this check
+
+        # GET request to search for a title
+        response = session.get(
             action="parse",
-            pageid=int("{pageid}".format(**item)),  # getting the content as specified by page id
-            format="json"
+            format="json",
+            prop="wikitext",
+            pageid=int("{pageid}".format(**item)),
+
         )
+
+        wikitext = mwparserfromhell.parse(response['parse']['wikitext']["*"])  # grabbing the wikicode content
         wiki_article_title = item['title']
-        # Introductory section that is not in the table of contents
-        section_title = 'MAIN_SECTION'  # using this label because it was used in the sample text file
-        soup = BeautifulSoup(content['parse']['text']['*'], 'html.parser')
-        start = soup.find_all('table')  # the preliminary section starts after the table tag
-        try:
-            statements=''
-            for element in start[0].next_siblings:
-                    # finding all p tags and ending at the next div tag
-                    if element.name == 'p':
-                        statements = element.get_text()
-                        statements = re.sub(tags_to_eliminate, '', statements)  # removing the footnote tags
-                        statements = sent_tokenize(statements)  # splitting it up into individual sentences
+        lead_section_title = "MAIN_TITLE"
+        lead_section_text = wikitext.get_sections(include_lead=True, include_headings=False)[0].strip_code()  #
+        tokenized_text = sent_tokenize(lead_section_text)
+        for entry in tokenized_text:
+            if not entry.startswith("thumb|"):  # thumbnail tags that seep through
+                sample_data.append([wiki_article_title, lead_section_title, entry])
 
-                        for statement in statements:
-                            if statement is not '':
-                                if 'Cite error' not in statement:
-                                    sample_data.append([wiki_article_title, section_title, statement])
-
-                    if element.name == 'div':
-                        break
-
-        # to combat the IndexError that woudl be raised when he for loop above is run
-        except IndexError:
-                    continue
+        sections = wikitext.filter_headings() # getting a list of sections as Wikicode
 
         exceptions = ['See also', 'References', 'External links', 'Further reading', 'Footnotes', 'Notes']
-        for k in content['parse']['sections']:
-            # Looping through all the sections
-            if k['line'] not in exceptions:  # filtering out sections with the following titles
-                if k['toclevel'] is 1:  # specifying only level 1 sections
-                    section_content = session.get(
-                        action="parse",
-                        pageid=int("{pageid}".format(**item)),
-                        section=(k['number']),  # filtering by section number
-                        format="json"
-                    )
-                    section_title = k['line']
-                    soup = BeautifulSoup(section_content['parse']['text']['*'], 'html.parser')
-                    statements=''
-                    for x in soup.find_all('p'):
-                        # finding all <p> tags
-                        statements = x.text
-                        statements = re.sub(tags_to_eliminate, '', statements)  # removing the footnote tags
-                        statements = sent_tokenize(statements)  # splitting it up into individual sentences
+        for section in sections:
+            if section.title.strip_code() not in exceptions:
+                if section.level is 2:  # filtering out the lower level headings
+                    section_title = section.title.strip_code()
+                    separator = ' '
+                    section_text = separator.join([x.strip_code() for x in wikitext.get_sections(
+                        matches=section_title, include_headings=False)])  # concatenating all string into one block of text
+                    tokenized_text = sent_tokenize(section_text)
+                    for entry in tokenized_text:
+                        if not entry.startswith("thumb|"):  # thumbnail tags that seep through
+                            sample_data.append([wiki_article_title, section_title, entry])
 
-                        for statement in statements:
-                            if statement is not '':
-                                if 'Cite error' not in statement:
-                                    sample_data.append([wiki_article_title, section_title, statement])
 
     # load the model
     model = load_model('model/fa_en_model_rnn_attention_section.h5')
