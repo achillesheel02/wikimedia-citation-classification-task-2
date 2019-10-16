@@ -159,7 +159,7 @@ def construct_instance_reasons(statements,  max_len=-1):
     section_dict = pickle.load(open('embeddings/section_dict_en.pck', 'rb'), encoding='latin1')
 
 
-    # constructnthe training data
+    # construct the training data
     X = []
     sections = []
     outstring=[]
@@ -197,14 +197,14 @@ if __name__ == '__main__':
 
     title_query = input('Type in the title of the article: \n> ')  # query for the Wikipedia title
     session = mwapi.Session('https://en.wikipedia.org')  # creating a new session
-
-    # GET request to search for a title
     titles = session.get(
         action="query",
         list="search",
         format="json",
-        srsearch='intitle:'+title_query, # nifty workaround the search-title-disabled error
+        srsearch='intitle:' + title_query,
     )
+
+    sample_data = []  # creating the dataset
 
     # conditional statement to handle empty response
     if titles['query']['searchinfo']['totalhits'] == 0:
@@ -219,44 +219,43 @@ if __name__ == '__main__':
             if titles['query']['searchinfo']['totalhits'] > 0:
                 break
 
-    sample_data = []
-
     for item in titles['query']['search']:
         if title_query.lower() not in item['title'].lower(): continue
-        # I noticed that some of the queries don't have the actual title query in the title so I did this check
 
         # GET request to search for a title
         response = session.get(
             action="parse",
             format="json",
-            prop="wikitext",
+            prop="wikitext",  # getting the wikitext property to parse
             pageid=int("{pageid}".format(**item)),
-
         )
 
-        wikitext = mwparserfromhell.parse(response['parse']['wikitext']["*"])  # grabbing the wikicode content
-        wiki_article_title = item['title']
+        wikitext = mwparserfromhell.parse(response['parse']['wikitext']["*"])  # creating the wikicode object
+        wiki_article_title = item['title']  # extracting the wikipedia article for later use
         lead_section_title = "MAIN_TITLE"
-        lead_section_text = wikitext.get_sections(include_lead=True, include_headings=False)[0].strip_code()  #
-        tokenized_text = sent_tokenize(lead_section_text)
-        for entry in tokenized_text:
-            if not entry.startswith("thumb|"):  # thumbnail tags that seep through
-                sample_data.append([wiki_article_title, lead_section_title, entry])
 
-        sections = wikitext.filter_headings() # getting a list of sections as Wikicode
+        # get_sections returns a list of content per section. with include_lead=True,
+        # the first item in this lis is the lead section content
+        lead_section_text = wikitext.get_sections(include_lead=True, include_headings=False)[0]
+        lead_section_text = declutter_header(lead_section_text)
 
-        exceptions = ['See also', 'References', 'External links', 'Further reading', 'Footnotes', 'Notes']
+        # extending the content into the dataset list
+        sample_data.extend(construct_test_data(wiki_article_title, lead_section_title, lead_section_text))
+
+        # getting all the level 1 headings
+        sections = wikitext.filter_headings(matches=lambda n: n.level == 2)
+        exceptions = ['See also', 'References', 'External links', 'Further reading',
+                      'Footnotes', 'Notes', 'Bibliography']
+
         for section in sections:
-            if section.title.strip_code() not in exceptions:
-                if section.level is 2:  # filtering out the lower level headings
-                    section_title = section.title.strip_code()
-                    separator = ' '
-                    section_text = separator.join([x.strip_code() for x in wikitext.get_sections(
-                        matches=section_title, include_headings=False)])  # concatenating all string into one block of text
-                    tokenized_text = sent_tokenize(section_text)
-                    for entry in tokenized_text:
-                        if not entry.startswith("thumb|"):  # thumbnail tags that seep through
-                            sample_data.append([wiki_article_title, section_title, entry])
+            # getting rid of unwanted sections, the re sub is for removing trailing and leading whitespaces in the
+            # section titles
+            if re.sub(r"^\s+|\s+$", "", section.title.strip_code()) not in exceptions:
+                section_title = section.title.strip_code()
+                section_text = wikitext.get_sections(matches=section_title, include_headings=False)
+                section_text = declutter(section_text)
+
+                sample_data.extend(construct_test_data(wiki_article_title, section_title, section_text))
 
 
     # load the model
@@ -276,7 +275,7 @@ if __name__ == '__main__':
         output.append([sample_data[idx][0],outstring[idx],y_pred[0]])
 
     # printing out results to console
-    output.sort(key=lambda x: x[2]) # sorting by order of prediction score
+    output.sort(key=lambda x: x[2])  # sorting by order of prediction score
     print('Wiki Title\tText\tPrediction\n')
     for result in output:
         print(result[0]+'\t'+result[1]+'\t'+str(result[2]))
