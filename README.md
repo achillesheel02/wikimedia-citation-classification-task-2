@@ -5,8 +5,8 @@
 1. `mwapi` - querying and parsing wikimedia content
 2. `keras` - running the model
 3. `tensorflow` - running the model
-5. `nltk` - tokenizing the paragrapgh into sentences
-6. `beautifulsoup4` - parsing the HTML content
+5. `nltk` - tokenizing the paragraph into sentences
+6. `mwparserfromhell` - parsing the wikicode content
 
 Note: `mwapi.Session` throws an error when using Python 2.7 (even though the package can be downloaded). Using Python 3.x recommended.
 
@@ -25,6 +25,13 @@ Program that:
 4. Run the program.
 
 ## Notes
+-Finally got the hang of `mwparserfromhell`. It parsed the lead section content prefectly.
+-Handled misspellings by using the `['suggested']` key in `['query']['searchinfo']` dictionary.
+-Fully moved from HTML text to Wikicode to tackle parsing out external URLs, headings, and other nodes that kept appearing when trying to parse the HTML content using BeautifulSoup.
+
+
+
+### Old Notes
  - The suggested `mwparserfromhell` was bringing problems during parsing of the HTML page, so I opted for BeautifulSoup
  - Since the models and the pickled files were created using Python 2 and mwapi only works in Python 3.x these files had to be ported with some alterations due to the unicode compatibility issues with the pickle functions. Tensorflow throws some warnings about depreciation of some functions.
  - Since the title query would bring mutiple results, I thought it apt to include a column for the article title the sentence comes from.
