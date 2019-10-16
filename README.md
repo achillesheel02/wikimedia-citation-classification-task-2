@@ -25,9 +25,9 @@ Program that:
 4. Run the program.
 
 ## Notes
--Finally got the hang of `mwparserfromhell`. It parsed the lead section content prefectly.
--Handled misspellings by using the `['suggested']` key in `['query']['searchinfo']` dictionary.
--Fully moved from HTML text to Wikicode to tackle parsing out external URLs, headings, and other nodes that kept appearing when trying to parse the HTML content using BeautifulSoup.
+ - Finally got the hang of `mwparserfromhell`. It parsed the lead section content prefectly.
+ - Handled misspellings by using the `['suggested']` key in `['query']['searchinfo']` dictionary.
+ - Fully moved from HTML text to Wikicode to tackle parsing out external URLs, headings, and other nodes that kept appearing when trying to parse the HTML content using BeautifulSoup.
 
 
 
