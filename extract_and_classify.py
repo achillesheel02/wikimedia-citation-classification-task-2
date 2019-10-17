@@ -249,7 +249,7 @@ if __name__ == '__main__':
         # getting all the level 1 headings
         sections = wikitext.filter_headings(matches=lambda n: n.level == 2)
         exceptions = ['See also', 'References', 'External links', 'Further reading',
-                      'Footnotes', 'Notes', 'Bibliography']
+                      'Footnotes', 'Notes', 'Bibliography', 'Literature']
 
         for section in sections:
             # getting rid of unwanted sections, the re sub is for removing trailing and leading whitespaces in the
